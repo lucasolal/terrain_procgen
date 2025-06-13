@@ -19,13 +19,13 @@ public class World : MonoBehaviour
     public float mountainScale;
     public float terrainPersistence;
     public float mountainPersistence;
-    public int terrainLacunarity;
-    public int mountainLacunarity;
+    public float terrainLacunarity;
+    public float mountainLacunarity;
     public int numSmallWaterBodies;
     public int numLargeWaterBodies;
     public float temperatureScale;
     public float temperaturePersistence;
-    public int temperatureLacunarity;
+    public float temperatureLacunarity;
     public int terrainOctaves;
     public int mountainOctaves;
     public int temperatureOctaves;
