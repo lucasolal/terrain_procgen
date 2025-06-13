@@ -26,7 +26,7 @@ public class BasicElevation
         splineStone = CubicSpline.InterpolateNaturalSorted
         (
             new double[] {  -0.6, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.6},
-            new double[] {  0.2, 0.3, 0.5, 0.5, 0.55, 0.7, 0.6, 0.4}
+            new double[] {  0.2, 0.35, 0.4, 0.5, 0.6, 0.5, 0.55, 0.4}
         );
         splineStoneSmooth = CubicSpline.InterpolateNaturalSorted
         (
