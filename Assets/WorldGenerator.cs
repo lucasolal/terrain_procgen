@@ -18,6 +18,20 @@ public class WorldGenerator : MonoBehaviour
     private Color savannaGrassColor;
     private BasicElevation basicElevation;
 
+    struct Segment3D
+    {
+        public int z, xl, xr, y, dz;
+
+        public Segment3D(int z, int xl, int xr, int y, int dz)
+        {
+            this.z = z;
+            this.xl = xl;
+            this.xr = xr;
+            this.y = y;
+            this.dz = dz;
+        }
+    }
+
     void Awake()
     {
         basicElevation = new BasicElevation(World.Instance.seed, 0.01f);
@@ -38,10 +52,11 @@ public class WorldGenerator : MonoBehaviour
         {
             WaterFloodFill(World.Instance.largeWaterMinVolume, World.Instance.largeWaterMaxVolume);
         }
+
         GenerateMesh();
     }
 
-    private Color GetColorForVoxel(Voxel.VoxelType type)
+    private Color GetVoxelColor(Voxel.VoxelType type)
     {
         switch (type)
         {
@@ -71,25 +86,19 @@ public class WorldGenerator : MonoBehaviour
         return voxels[x, y, z];
     }
 
-
-
-    private Voxel.VoxelType DetermineVoxelType(float x, float z, float y)
-    {
-        return basicElevation.VoxelAt((int)x, (int)y, (int)z);
-    }
-
-
     private void InitializeVoxels()
     {
         for (int x = 0; x < World.Instance.worldSizeX; x++)
         {
-            for (int y = 0; y < World.Instance.worldHeight; y++)
+            for (int z = 0; z < World.Instance.worldSizeZ; z++)
             {
-                for (int z = 0; z < World.Instance.worldSizeZ; z++)
+                Voxel.VoxelType[] column = basicElevation.ColumnAt(x, z);
+                for (int y = 0; y < World.Instance.worldHeight; y++)
                 {
                     Vector3 worldPos = transform.position + new Vector3(x, y, z);
-                    Voxel.VoxelType type = DetermineVoxelType(worldPos.x, worldPos.y, worldPos.z);
-                    voxels[x, y, z] = new Voxel(worldPos, type, type != Voxel.VoxelType.Air);
+                    //Voxel.VoxelType type = DetermineVoxelType(worldPos.x, worldPos.y, worldPos.z);
+                    //voxels[x, y, z] = new Voxel(worldPos, type, type != Voxel.VoxelType.Air);
+                    voxels[x, y, z] = new Voxel(worldPos, column[y], column[y] != Voxel.VoxelType.Air);
                 }
             }
         }
@@ -100,10 +109,13 @@ public class WorldGenerator : MonoBehaviour
     {
         Stopwatch stopwatch = new Stopwatch();
         stopwatch.Start();
+        long memoryBefore = System.GC.GetTotalMemory(true);
         voxels = new Voxel[World.Instance.worldSizeX, World.Instance.worldHeight, World.Instance.worldSizeZ];
         InitializeVoxels();
         stopwatch.Stop();
-        UnityEngine.Debug.Log($"WorldGenerator - Initialize - mundo {World.Instance.worldSizeX} x {World.Instance.worldSizeZ} terminou em {stopwatch.Elapsed.TotalSeconds} s.");
+        long memoryAfter = System.GC.GetTotalMemory(true);
+        double memoryUsedMB = (memoryAfter - memoryBefore) / (1024.0 * 1024.0);
+        UnityEngine.Debug.Log($"WorldGenerator - Initialize - mundo {World.Instance.worldSizeX} x {World.Instance.worldSizeZ} terminou em {stopwatch.Elapsed.TotalSeconds} s. Usou  {memoryUsedMB:F2} MB");
     }
 
     public void IterateVoxels()
@@ -174,7 +186,7 @@ public class WorldGenerator : MonoBehaviour
     {
 
         Voxel voxel = voxels[x, y, z];
-        Color voxelColor = GetColorForVoxel(voxel.type);
+        Color voxelColor = GetVoxelColor(voxel.type);
 
         if (faceIndex == 0)
         {
@@ -292,25 +304,38 @@ public class WorldGenerator : MonoBehaviour
         if (World.Instance.noWater) return;
         System.Random rng = new System.Random(World.Instance.seed + 2);
         int attempts = 1000;
+        long startMemory = System.GC.GetTotalMemory(false);
+        HashSet<(Vector3Int, Vector3Int)> visitedEdges = new HashSet<(Vector3Int, Vector3Int)>();
 
         for (int attempt = 0; attempt < attempts; attempt++)
         {
+            long peakMemory = System.GC.GetTotalMemory(false);
             Stopwatch stopwatch = new Stopwatch();
             stopwatch.Start();
             int startX = rng.Next(0, World.Instance.worldSizeX);
             int startZ = rng.Next(0, World.Instance.worldSizeZ);
 
             int surfaceY = -1;
-            for (int y = World.Instance.worldHeight - 1; y > 0; y--)
+            if (World.Instance.terrainOctaves == 0)
             {
-
-                if (IsInBounds(startX, y, startZ) &&
-                    voxels[startX, y, startZ].type != Voxel.VoxelType.Air &&
-                    IsInBounds(startX, y + 1, startZ) &&
-                    voxels[startX, y + 1, startZ].type == Voxel.VoxelType.Air)
+                //para testes. Quando tem 0 oitavas o mundo é vazio e quero preenche-lo todo com água
+                surfaceY = World.Instance.worldHeight - 1;
+                minVolume = 0;
+                maxVolume = 99999999;
+            }
+            else
+            {
+                for (int y = World.Instance.worldHeight - 1; y > 0; y--)
                 {
-                    surfaceY = y + 1;
-                    break;
+
+                    if (IsInBounds(startX, y, startZ) &&
+                        voxels[startX, y, startZ].type != Voxel.VoxelType.Air &&
+                        IsInBounds(startX, y + 1, startZ) &&
+                        voxels[startX, y + 1, startZ].type == Voxel.VoxelType.Air)
+                    {
+                        surfaceY = y + 1;
+                        break;
+                    }
                 }
             }
 
@@ -321,7 +346,6 @@ public class WorldGenerator : MonoBehaviour
             Vector3Int start = new Vector3Int(startX, surfaceY, startZ);
             queue.Enqueue(start);
             visited.Add(start);
-
             int volume = 0;
 
             while (queue.Count > 0)
@@ -331,6 +355,8 @@ public class WorldGenerator : MonoBehaviour
                 if (y > surfaceY) continue;
                 if (IsInBounds(x, y, z) && voxels[x, y, z].type == Voxel.VoxelType.Air)
                 {
+                    long currentMemory = System.GC.GetTotalMemory(false);
+                    if (currentMemory > peakMemory) peakMemory = currentMemory;
                     volume++;
                     if (volume > maxVolume) break;
                 }
@@ -344,6 +370,8 @@ public class WorldGenerator : MonoBehaviour
                 foreach (var dir in directions)
                 {
                     Vector3Int neighbor = current + dir;
+                    var edge = (MinVector(current, neighbor), MaxVector(current, neighbor));
+                    if (IsInBounds(neighbor.x, neighbor.y, neighbor.z) && neighbor.y <= surfaceY) visitedEdges.Add(edge);
                     if (IsInBounds(neighbor.x, neighbor.y, neighbor.z) &&
                         !visited.Contains(neighbor) &&
                         voxels[neighbor.x, neighbor.y, neighbor.z].type == Voxel.VoxelType.Air)
@@ -364,7 +392,8 @@ public class WorldGenerator : MonoBehaviour
                     voxels[pos.x, pos.y, pos.z] = new Voxel(new Vector3(pos.x, pos.y, pos.z), Voxel.VoxelType.Water, true);
                 }
                 stopwatch.Stop();
-                UnityEngine.Debug.Log($"WaterFloodFill - volume {volume} terminou em {stopwatch.Elapsed.TotalSeconds} s.");
+                long peakMemoryMB = (peakMemory - startMemory) / (1024 * 1024);
+                UnityEngine.Debug.Log($"WaterFloodFill - volume {volume} terminou em {stopwatch.Elapsed.TotalSeconds} s. Uso de memória {peakMemoryMB} MB. Qtd arestas: {visitedEdges.Count}");
                 return;
             }
             else
@@ -374,6 +403,21 @@ public class WorldGenerator : MonoBehaviour
         }
     }
 
+    Vector3Int MinVector(Vector3Int a, Vector3Int b)
+    {
+        if (a.x != b.x) return a.x < b.x ? a : b;
+        if (a.y != b.y) return a.y < b.y ? a : b;
+        return a.z < b.z ? a : b;
+    }
+
+    Vector3Int MaxVector(Vector3Int a, Vector3Int b)
+    {
+        if (a.x != b.x) return a.x > b.x ? a : b;
+        if (a.y != b.y) return a.y > b.y ? a : b;
+        return a.z > b.z ? a : b;
+    }
+
+
     private bool IsInBounds(int x, int y, int z)
     {
         return x >= 0 && x < World.Instance.worldSizeX &&
@@ -382,5 +426,8 @@ public class WorldGenerator : MonoBehaviour
     }
 
 
+
 }
+
+
 

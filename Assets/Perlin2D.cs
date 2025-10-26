@@ -1,21 +1,22 @@
 using UnityEngine;
 using System;
+using System.IO;
 
 public class Perlin2D
 {
     private int seed;
-    public int[] p;
+    private int[] p;
     private float scale;
 
     private static readonly Vector2[] gradients = new Vector2[] {
-    new Vector2( 1,  0),
-    new Vector2(-1,  0),
-    new Vector2( 0,  1),
-    new Vector2( 0, -1),
-    new Vector2( 0.7071f,  0.7071f),
-    new Vector2(-0.7071f,  0.7071f),
-    new Vector2( 0.7071f, -0.7071f),
-    new Vector2(-0.7071f, -0.7071f)
+        new Vector2( 1,  0),
+        new Vector2(-1,  0),
+        new Vector2( 0,  1),
+        new Vector2( 0, -1),
+        new Vector2( 0.7071f,  0.7071f),
+        new Vector2(-0.7071f,  0.7071f),
+        new Vector2( 0.7071f, -0.7071f),
+        new Vector2(-0.7071f, -0.7071f)
 };
 
     public Perlin2D(int seed, float scale)
@@ -52,27 +53,17 @@ public class Perlin2D
         }
     }
 
-    public static float lerp(float a, float b, float x)
+    private float lerp(float a, float b, float x)
     {
         return a + x * (b - a);
     }
 
-    public static float fade(float t)
+    private float fade(float t)
     {
         return t * t * t * (t * (t * 6 - 15) + 10);
     }
 
-    public static float gradOld(int hash, float x, float y)
-    {
-        int h = hash & 7;
-        float u = h < 4 ? x : y;
-        float v = h < 4 ? y : x;
-
-        return ((h & 1) != 0 ? -u : u) + ((h & 2) != 0 ? -2.0f * v : 2.0f * v);
-    }
-
-
-    public static float grad(int hash, float x, float y)
+    private float grad(int hash, float x, float y)
     {
         Vector2 g = gradients[hash & 7];
         return g.x * x + g.y * y;
@@ -125,54 +116,40 @@ public class Perlin2D
         return total / maxValue;
     }
 
-    public Texture2D GenerateNoiseMap(int width, int height)
+    public void ExportOctavePerlinSamplesToCSVOld(string filePath, int width, int height, int octaves, float persistence, float lacunarity)
     {
-        Texture2D noiseMap = new Texture2D(width, height);
-
-        for (int y = 0; y < height; y++)
+        using (StreamWriter writer = new StreamWriter(filePath))
         {
-            for (int x = 0; x < width; x++)
+            for (int y = 0; y < height; y++)
             {
-                //float noiseValue = (OctavePerlin(x, y, 4, 0.5f));
-                float noiseValue = (perlin(x, y));
-
-                Color color = new Color((float)noiseValue, (float)noiseValue, (float)noiseValue);
-                if (-0.001f < noiseValue &&  noiseValue < 0.001f) color = Color.red;
-                noiseMap.SetPixel(x, y, color);
+                for (int x = 0; x < width; x++)
+                {
+                    float noiseValue = OctavePerlin(x, y, octaves, persistence, lacunarity);
+                    writer.WriteLine(noiseValue.ToString((System.Globalization.CultureInfo.InvariantCulture)));
+                }
             }
         }
 
-        // Aplica as mudanças na textura
-        noiseMap.Apply();
-
-        return noiseMap;
+        Debug.Log($"Arquivo CSV salvo em: {filePath}");
     }
 
-    public void SampleStats()
+    public void ExportOctavePerlinSamplesToCSV(string filePath, int sampleCount, int octaves, float persistence, float lacunarity)
     {
-        float total = 0f;
-        float min = float.MaxValue;
-        float max = float.MinValue;
+        System.Random rng = new System.Random(seed + 42); // seed derivada para amostragem
+        float sampleRange = 4096f;
 
-        System.Random rng = new System.Random();
-
-        for (int i = 0; i < 1000; i++)
+        using (StreamWriter writer = new StreamWriter(filePath))
         {
-            float x = (float)(rng.NextDouble() * 1000);
-            float y = (float)(rng.NextDouble() * 1000);
-
-            float value = OctavePerlin(x, y, 2, 0.5f, 2);
-
-            total += value;
-            if (value < min) min = value;
-            if (value > max) max = value;
+            for (int i = 0; i < sampleCount; i++)
+            {
+                float x = (float)(rng.NextDouble() * sampleRange);
+                float y = (float)(rng.NextDouble() * sampleRange);
+                float noiseValue = OctavePerlin(x, y, octaves, persistence, lacunarity);
+                writer.WriteLine(noiseValue.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
         }
 
-        float mean = total / 10000f;
-
-        Debug.Log($"Média do ruído: {mean}");
-        Debug.Log($"Valor mínimo do ruído: {min}");
-        Debug.Log($"Valor máximo do ruído: {max}");
+        Debug.Log($"Arquivo CSV salvo com {sampleCount} amostras aleatórias em: {filePath}");
     }
 
 }

@@ -50,19 +50,19 @@ public static class BiomePicker
         {
             return highMountainPainter;
         }
-        else if (temperatureValue > 0.2)
+        else if (temperatureValue > World.Instance.highTemperatureThreshold)
         {
             return desertPainter;
         }
-        else if (temperatureValue > 0.055)
+        else if (temperatureValue > World.Instance.middleTemperatureThreshold)
         {
             return savannaPainter;
         }
-        else if (temperatureValue < -0.2)
+        else if (temperatureValue < -1 * World.Instance.highTemperatureThreshold)
         {
             return snowPainter;
         }
-         else if (temperatureValue < -0.055)
+         else if (temperatureValue < -1 * World.Instance.middleTemperatureThreshold)
         {
             return temperatePainter;
         }
